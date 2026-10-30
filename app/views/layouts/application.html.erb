@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <title><%= content_for(:title) || "Legislativo Aberto — Deputados, Senadores, Propostas e Gastos" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Legislativo Aberto">
+    <meta name="mobile-web-app-capable" content="yes">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+
+    <%= yield :head %>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icon.png">
+
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+  </head>
+
+  <body>
+    <header class="navbar">
+      <div class="container navbar-content">
+        <%= link_to root_path, class: "brand" do %>
+          <div class="brand-logo-box">🏛️</div>
+          <div>
+            <span class="brand-title">Legislativo<span class="brand-accent">Aberto</span></span>
+            <span class="brand-subtitle">Transparência • Câmara &amp; Senado</span>
+          </div>
+        <% end %>
+
+        <nav class="nav-links">
+          <%= link_to parlamentares_path, class: "nav-link #{'active' if controller_name == 'parlamentares'}" do %>
+            <span>👥 Parlamentares</span>
+          <% end %>
+          <%= link_to propostas_path, class: "nav-link #{'active' if controller_name == 'propostas'}" do %>
+            <span>📜 Propostas &amp; PLs</span>
+          <% end %>
+        </nav>
+
+        <div class="navbar-right">
+          <%= form_with url: parlamentares_path, method: :get, local: true, class: "navbar-quick-search" do |f| %>
+            <span class="navbar-search-icon">🔍</span>
+            <%= f.search_field :q, value: params[:q], placeholder: "Buscar parlamentar ou partido...", class: "navbar-search-input" %>
+          <% end %>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-wrapper">
+      <div class="container main-content">
+        <% if notice.present? %>
+          <div class="flash flash-notice" role="status">
+            <span>✅ <%= notice %></span>
+            <button type="button" class="flash-close" onclick="this.parentElement.remove()">✕</button>
+          </div>
+        <% end %>
+        <% if alert.present? %>
+          <div class="flash flash-alert" role="alert">
+            <span>⚠️ <%= alert %></span>
+            <button type="button" class="flash-close" onclick="this.parentElement.remove()">✕</button>
+          </div>
+        <% end %>
+
+        <%= yield %>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-grid">
+        <div class="footer-brand">
+          <strong>🏛️ Legislativo Aberto</strong>
+          <p>Plataforma de transparência pública para acompanhamento de Deputados Federais, Senadores, Projetos de Lei e Cota Parlamentar.</p>
+        </div>
+        <div class="footer-links">
+          <span>Fontes Oficiais:</span>
+          <a href="https://dadosabertos.camara.leg.br" target="_blank" rel="noopener">Dados Abertos da Câmara ↗</a>
+          <a href="https://legis.senado.leg.br/dadosabertos" target="_blank" rel="noopener">Dados Abertos do Senado ↗</a>
+          <a href="https://portaldatransparencia.gov.br" target="_blank" rel="noopener">Portal da Transparência ↗</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

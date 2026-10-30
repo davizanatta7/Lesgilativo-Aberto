@@ -1,0 +1,146 @@
+<% content_for :title, "#{@proposta.titulo} — Legislativo Aberto" %>
+
+<div class="breadcrumb">
+  <%= link_to "← Voltar para Propostas", propostas_path, class: "breadcrumb-link" %>
+</div>
+
+<article class="proposta-detail-card">
+  <div class="proposta-detail-top">
+    <div class="proposta-badges">
+      <span class="badge <%= @proposta.casa == 'camara' ? 'badge-camara' : 'badge-senado' %>">
+        <%= @proposta.casa_label %>
+      </span>
+      <span class="badge badge-tipo"><%= @proposta.sigla_tipo %></span>
+      <% if @proposta.descricao_tipo.present? %>
+        <span class="badge badge-neutral"><%= @proposta.descricao_tipo %></span>
+      <% end %>
+      <% if @proposta.status_situacao.present? %>
+        <span class="badge badge-status"><%= @proposta.status_situacao %></span>
+      <% end %>
+    </div>
+
+    <h1 class="proposta-detail-title"><%= @proposta.titulo %></h1>
+
+    <% if @proposta.data_apresentacao.present? %>
+      <p class="proposta-detail-meta">
+        Apresentada em <strong><%= @proposta.data_apresentacao.strftime("%d/%m/%Y") %></strong>
+      </p>
+    <% end %>
+  </div>
+
+  <div class="proposta-detail-actions">
+    <% if @proposta.url_inteiro_teor.present? %>
+      <a href="<%= @proposta.url_inteiro_teor %>" target="_blank" rel="noopener" class="btn btn-primary">
+        📄 Abrir Texto Completo / Inteiro Teor (PDF) ↗
+      </a>
+    <% end %>
+
+    <a href="<%= @proposta.url_pagina_oficial %>" target="_blank" rel="noopener" class="btn btn-outline">
+      🔗 Ficha Oficial na <%= @proposta.casa == "camara" ? "Câmara" : "Senado" %> ↗
+    </a>
+
+    <%= button_to "🔄 Atualizar Tramitação e Votações", sincronizar_proposta_path(@proposta), method: :post, class: "btn btn-outline", data: { turbo_submits_with: "Atualizando..." } %>
+  </div>
+
+  <div class="proposta-detail-section">
+    <h3>Ementa</h3>
+    <p class="proposta-ementa-large"><%= @proposta.ementa.presence || "Ementa não informada." %></p>
+
+    <% if @proposta.ementa_detalhada.present? %>
+      <h4>Explicação da Ementa</h4>
+      <p class="proposta-ementa-detalhada"><%= @proposta.ementa_detalhada %></p>
+    <% end %>
+  </div>
+
+  <% if @proposta.status_situacao.present? || @proposta.status_orgao.present? || @proposta.status_despacho.present? || @proposta.status_regime.present? %>
+    <div class="proposta-detail-section tramitacao-box">
+      <h3>Status e Tramitação Atual</h3>
+      <div class="profile-details-grid">
+        <% if @proposta.status_situacao.present? %>
+          <div class="detail-item">
+            <span class="detail-label">Situação</span>
+            <span class="detail-value"><%= @proposta.status_situacao %></span>
+          </div>
+        <% end %>
+
+        <% if @proposta.status_orgao.present? %>
+          <div class="detail-item">
+            <span class="detail-label">Órgão / Comissão Atual</span>
+            <span class="detail-value"><%= @proposta.status_orgao %></span>
+          </div>
+        <% end %>
+
+        <% if @proposta.status_regime.present? %>
+          <div class="detail-item">
+            <span class="detail-label">Regime de Tramitação</span>
+            <span class="detail-value"><%= @proposta.status_regime %></span>
+          </div>
+        <% end %>
+      </div>
+
+      <% if @proposta.status_despacho.present? %>
+        <div class="despacho-box">
+          <span class="detail-label">Último Despacho</span>
+          <p><%= @proposta.status_despacho %></p>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% if @votacoes.present? %>
+    <div class="proposta-detail-section">
+      <h3>🗳️ Votações Nominais desta Proposta (<%= @votacoes.size %>)</h3>
+      <div class="votacoes-cards-list">
+        <% @votacoes.each do |votacao| %>
+          <div class="votacao-item-card" style="flex-direction: column; align-items: stretch;">
+            <div class="votacao-item-badges">
+              <span class="badge <%= votacao.resultado_classe %>"><%= votacao.resultado_label %></span>
+              <% if votacao.orgao.present? %>
+                <span class="badge badge-neutral"><%= votacao.orgao %></span>
+              <% end %>
+              <% if votacao.data.present? %>
+                <time class="proposta-date">📅 <%= votacao.data.strftime("%d/%m/%Y %H:%M") %></time>
+              <% end %>
+            </div>
+            <p class="votacao-descricao"><%= votacao.descricao %></p>
+            <div class="votacao-placar">
+              <span class="placar-pill placar-sim">✅ Sim: <strong><%= votacao.votos_sim %></strong></span>
+              <span class="placar-pill placar-nao">❌ Não: <strong><%= votacao.votos_nao %></strong></span>
+              <span class="placar-pill">⚪ Outros/Abst: <strong><%= votacao.votos_outros %></strong></span>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @proposta.keywords.present? %>
+    <div class="proposta-detail-section">
+      <h3>Palavras-chave / Indexação</h3>
+      <p class="keywords-text"><%= @proposta.keywords %></p>
+    </div>
+  <% end %>
+
+  <div class="proposta-detail-section">
+    <h3>Parlamentares Autores</h3>
+    <% if @proposta.parlamentares.any? %>
+      <div class="authors-grid">
+        <% @proposta.parlamentares.each do |parlamentar| %>
+          <%= link_to parlamentar_path(parlamentar), class: "author-card" do %>
+            <% if parlamentar.foto_url.present? %>
+              <img src="<%= parlamentar.foto_url %>" alt="<%= parlamentar.nome %>" class="author-card-avatar">
+            <% else %>
+              <div class="author-card-avatar-fallback"><%= parlamentar.nome.first(2).upcase %></div>
+            <% end %>
+            <div>
+              <strong><%= parlamentar.nome %></strong>
+              <span><%= parlamentar.cargo_label %> • <%= parlamentar.partido %>-<%= parlamentar.uf %></span>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="muted-text">Autoria de comissão, Poder Executivo ou parlamentar de legislatura anterior.</p>
+    <% end %>
+  </div>
+</article>

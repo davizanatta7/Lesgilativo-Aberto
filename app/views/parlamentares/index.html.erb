@@ -1,0 +1,164 @@
+<% content_for :title, "Deputados Federais e Senadores — Legislativo Aberto" %>
+
+<section class="hero-banner">
+  <div class="hero-banner-content">
+    <span class="hero-eyebrow">🇧🇷 Congresso Nacional em Dados Abertos</span>
+    <h1>Explore Deputados Federais e Senadores</h1>
+    <p>Pesquise por nome, partido ou estado. Clique em qualquer parlamentar para consultar seus projetos de lei, gastos da cota parlamentar, notas fiscais e redes sociais oficiais.</p>
+
+    <div class="house-tabs">
+      <%= link_to parlamentares_path(request.query_parameters.except(:casa, :pagina)),
+            class: "house-tab #{'active' if params[:casa].blank?}" do %>
+        <span>🏛️ Todos</span>
+        <span class="tab-count"><%= @total_deputados + @total_senadores %></span>
+      <% end %>
+
+      <%= link_to parlamentares_path(request.query_parameters.merge(casa: "camara").except(:pagina)),
+            class: "house-tab house-tab-camara #{'active' if params[:casa] == 'camara'}" do %>
+        <span>🟢 Câmara dos Deputados</span>
+        <span class="tab-count"><%= @total_deputados %></span>
+      <% end %>
+
+      <%= link_to parlamentares_path(request.query_parameters.merge(casa: "senado").except(:pagina)),
+            class: "house-tab house-tab-senado #{'active' if params[:casa] == 'senado'}" do %>
+        <span>🔵 Senado Federal</span>
+        <span class="tab-count"><%= @total_senadores %></span>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="hero-banner-side">
+    <div class="hero-mini-stats">
+      <div class="mini-stat">
+        <span>Parlamentares Ativos</span>
+        <strong><%= @total_deputados + @total_senadores %></strong>
+      </div>
+      <div class="mini-stat">
+        <span>Propostas no Catálogo</span>
+        <strong><%= @total_propostas %></strong>
+      </div>
+    </div>
+    <%= button_to "🔄 Atualizar Dados Oficiais", sincronizar_todos_parlamentares_path, method: :post, class: "btn btn-sync-hero", data: { turbo_submits_with: "Sincronizando APIs..." } %>
+  </div>
+</section>
+
+<section class="search-and-filters-box">
+  <%= form_with url: parlamentares_path, method: :get, local: true, class: "search-panel-form" do |f| %>
+    <div class="search-bar-Highlight">
+      <span class="search-icon" aria-hidden="true">🔍</span>
+      <%= f.search_field :q,
+            value: params[:q],
+            placeholder: "Digite o nome do parlamentar, partido ou UF (ex: Nikolas PL, Erika PSOL, Moro, PT, SP...)",
+            class: "search-bar-input",
+            autocomplete: "off",
+            oninput: "clearTimeout(this._timer); this._timer = setTimeout(() => this.form.requestSubmit(), 320);" %>
+      <% if params[:q].present? %>
+        <%= link_to "✕", parlamentares_path(request.query_parameters.except(:q, :pagina)), class: "search-clear-btn", title: "Limpar busca" %>
+      <% end %>
+      <%= f.submit "Pesquisar", class: "btn btn-primary search-bar-btn" %>
+    </div>
+
+    <div class="quick-party-bar">
+      <span class="quick-party-label">Partidos rápidos:</span>
+      <div class="quick-party-pills">
+        <%= link_to "Todos", parlamentares_path(request.query_parameters.except(:partido, :pagina)),
+              class: "party-chip #{'active' if params[:partido].blank?}" %>
+        <% %w[PL PT UNIÃO PP PSD MDB REPUBLICANOS PSDB PDT PSOL PSB NOVO].each do |sigla| %>
+          <% next unless @partidos.include?(sigla) %>
+          <%= link_to sigla,
+                parlamentares_path(request.query_parameters.merge(partido: sigla).except(:pagina)),
+                class: "party-chip #{'active' if params[:partido] == sigla}" %>
+        <% end %>
+      </div>
+    </div>
+
+    <div class="secondary-filters-row">
+      <div class="filter-group">
+        <%= f.label :casa, "Casa Legislativa" %>
+        <%= f.select :casa, [
+          ["Todas (Câmara + Senado)", ""],
+          ["Câmara dos Deputados", "camara"],
+          ["Senado Federal", "senado"]
+        ], { selected: params[:casa] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+      </div>
+
+      <div class="filter-group">
+        <%= f.label :partido, "Partido" %>
+        <%= f.select :partido, [["Todos os Partidos (#{@partidos.size})", ""]] + @partidos.map { |p| [p, p] }, { selected: params[:partido] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+      </div>
+
+      <div class="filter-group">
+        <%= f.label :uf, "Estado (UF)" %>
+        <%= f.select :uf, [["Todos os Estados (27 UFs)", ""]] + @ufs.map { |uf| [uf, uf] }, { selected: params[:uf] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+      </div>
+
+      <div class="filter-group">
+        <%= f.label :ordem, "Ordenar por" %>
+        <%= f.select :ordem, [
+          ["Ordem Alfabética (A-Z)", "nome"],
+          ["Mais Propostas Sincronizadas", "propostas"],
+          ["Maiores Gastos Sincronizados", "gastos"]
+        ], { selected: params[:ordem].presence || "nome" }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+      </div>
+
+      <div class="filter-buttons">
+        <%= link_to "Limpar Tudo", parlamentares_path, class: "btn btn-outline" %>
+      </div>
+    </div>
+  <% end %>
+</section>
+
+<div id="catalogo_parlamentares">
+  <div class="results-toolbar">
+    <p class="results-count-text">
+      Mostrando <strong><%= @parlamentares.size %></strong> de <strong><%= @total_filtrado %></strong> parlamentares
+      <% if params[:q].present? %>
+        para <span class="active-filter-tag">Busca: "<%= params[:q] %>"</span>
+      <% end %>
+      <% if params[:partido].present? %>
+        <span class="active-filter-tag">Partido: <%= params[:partido] %></span>
+      <% end %>
+      <% if params[:uf].present? %>
+        <span class="active-filter-tag">UF: <%= params[:uf] %></span>
+      <% end %>
+    </p>
+  </div>
+
+  <% if @parlamentares.any? %>
+    <div class="parlamentares-grid">
+      <%= render partial: "parlamentares/card", collection: @parlamentares, as: :parlamentar %>
+    </div>
+
+    <% if @total_paginas > 1 %>
+      <nav class="pagination" aria-label="Paginação">
+        <% if @pagina > 1 %>
+          <%= link_to "← Anterior", parlamentares_path(request.query_parameters.merge(pagina: @pagina - 1)), class: "btn btn-outline" %>
+        <% end %>
+
+        <div class="pagination-pages">
+          <% inicio = [@pagina - 2, 1].max %>
+          <% fim = [inicio + 4, @total_paginas].min %>
+          <% (inicio..fim).each do |num| %>
+            <%= link_to num, parlamentares_path(request.query_parameters.merge(pagina: num)), class: "page-number #{'active' if num == @pagina}" %>
+          <% end %>
+        </div>
+
+        <% if @pagina < @total_paginas %>
+          <%= link_to "Próxima →", parlamentares_path(request.query_parameters.merge(pagina: @pagina + 1)), class: "btn btn-outline" %>
+        <% end %>
+      </nav>
+    <% end %>
+  <% else %>
+    <div class="empty-state">
+      <div class="empty-icon">🔎</div>
+      <h3>Nenhum deputado ou senador encontrado</h3>
+      <% if @total_deputados.zero? && @total_senadores.zero? %>
+        <p>O banco de dados local ainda está vazio. Clique no botão abaixo para importar os Deputados e Senadores das APIs oficiais da Câmara e do Senado.</p>
+        <%= button_to "🔄 Importar Deputados e Senadores Agora", sincronizar_todos_parlamentares_path, method: :post, class: "btn btn-primary", data: { turbo_submits_with: "Importando dados oficiais..." } %>
+      <% else %>
+        <p>Não encontramos nenhum parlamentar para os filtros selecionados (<strong><%= [params[:q], params[:partido], params[:uf]].compact_blank.join(' • ') %></strong>).</p>
+        <%= link_to "Limpar filtros e ver todos", parlamentares_path, class: "btn btn-primary" %>
+      <% end %>
+    </div>
+  <% end %>
+</div>

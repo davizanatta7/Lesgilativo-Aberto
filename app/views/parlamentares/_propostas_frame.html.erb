@@ -1,0 +1,80 @@
+<div id="parlamentar_propostas">
+  <div class="section-header">
+    <div>
+      <h2>📜 Propostas e Matérias Legislativas (<%= total_propostas_parlamentar %>)</h2>
+      <p class="section-subtitle">Projetos de Lei (PL), Emendas à Constituição (PEC), Requerimentos e matérias apresentadas por <%= parlamentar.nome %>.</p>
+    </div>
+  </div>
+
+  <div class="filter-panel">
+    <%= form_with url: parlamentar_path(parlamentar), method: :get, local: true, class: "search-panel-form" do |f| %>
+      <div class="search-bar-Highlight">
+        <span class="search-icon">🔍</span>
+        <%= f.search_field :q,
+              value: params[:q],
+              placeholder: "Pesquisar nas propostas de #{parlamentar.nome} (ex: saúde, educação, imposto, PL...)",
+              class: "search-bar-input" %>
+        <% if params[:q].present? %>
+          <%= link_to "✕", parlamentar_path(parlamentar, tipo: params[:tipo]), class: "search-clear-btn" %>
+        <% end %>
+        <%= f.submit "Filtrar", class: "btn btn-primary search-bar-btn" %>
+      </div>
+
+      <% if tipos_proposta.any? %>
+        <div class="quick-party-bar">
+          <span class="quick-party-label">Filtrar por tipo:</span>
+          <div class="quick-party-pills">
+            <%= link_to "Todos (#{parlamentar.propostas_count})",
+                  parlamentar_path(parlamentar, q: params[:q]),
+                  class: "party-chip #{'active' if params[:tipo].blank?}" %>
+            <% tipos_proposta.each do |sigla| %>
+              <%= link_to sigla,
+                    parlamentar_path(parlamentar, tipo: sigla, q: params[:q]),
+                    class: "party-chip #{'active' if params[:tipo] == sigla}" %>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+
+  <% if propostas.any? %>
+    <div class="propostas-list">
+      <% propostas.each do |proposta| %>
+        <article class="proposta-card">
+          <div class="proposta-card-header">
+            <div class="proposta-badges">
+              <span class="badge badge-tipo"><%= proposta.titulo %></span>
+              <% if proposta.descricao_tipo.present? %>
+                <span class="badge badge-neutral"><%= proposta.descricao_tipo %></span>
+              <% end %>
+              <% if proposta.status_situacao.present? %>
+                <span class="badge badge-status"><%= proposta.status_situacao %></span>
+              <% end %>
+            </div>
+            <% if proposta.data_apresentacao.present? %>
+              <time class="proposta-date">📅 <%= proposta.data_apresentacao.strftime("%d/%m/%Y") %></time>
+            <% end %>
+          </div>
+
+          <p class="proposta-ementa"><%= proposta.ementa.presence || "Ementa não informada." %></p>
+
+          <div class="proposta-card-footer">
+            <%= link_to "Ver detalhes, autores e tramitação →", proposta_path(proposta), class: "btn btn-sm btn-outline" %>
+            <% if proposta.url_inteiro_teor.present? %>
+              <a href="<%= proposta.url_inteiro_teor %>" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
+                📄 Inteiro Teor (PDF) ↗
+              </a>
+            <% end %>
+          </div>
+        </article>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="empty-state">
+      <div class="empty-icon">📜</div>
+      <h3>Nenhuma proposta encontrada</h3>
+      <p>Clique em "Atualizar Dados, Gastos e Propostas" no topo do perfil para sincronizar com a <%= parlamentar.casa_label %>.</p>
+    </div>
+  <% end %>
+</div>

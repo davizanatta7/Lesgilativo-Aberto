@@ -1,0 +1,69 @@
+<% cache ["v3", parlamentar, parlamentar.propostas_count, parlamentar.total_despesas.to_i] do %>
+  <%= link_to parlamentar_path(parlamentar),
+        class: "parlamentar-card #{parlamentar.deputado? ? 'card-camara' : 'card-senado'}",
+        data: { turbo_frame: "_top" },
+        title: "Abrir perfil completo de #{parlamentar.nome}" do %>
+
+    <div class="card-banner">
+      <span class="badge-house <%= parlamentar.deputado? ? 'house-camara' : 'house-senado' %>">
+        <%= parlamentar.deputado? ? "Câmara • Deputado(a)" : "Senado • Senador(a)" %>
+      </span>
+      <div class="parlamentar-party-row">
+        <span class="badge badge-party-strong"><%= parlamentar.partido.presence || "S/P" %></span>
+        <span class="badge badge-uf"><%= parlamentar.uf %></span>
+      </div>
+    </div>
+
+    <div class="parlamentar-card-main">
+      <div class="parlamentar-avatar-container">
+        <% if parlamentar.foto_url.present? %>
+          <img src="<%= parlamentar.foto_url %>"
+               alt="Foto de <%= parlamentar.nome %>"
+               class="parlamentar-avatar"
+               loading="lazy"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="parlamentar-avatar-fallback" style="display: none;"><%= parlamentar.nome.first(2).upcase %></div>
+        <% else %>
+          <div class="parlamentar-avatar-fallback"><%= parlamentar.nome.first(2).upcase %></div>
+        <% end %>
+      </div>
+
+      <div class="parlamentar-card-identity">
+        <h3 class="parlamentar-name"><%= parlamentar.nome %></h3>
+        <p class="parlamentar-subtitle">
+          <%= parlamentar.cargo_label %> por <strong><%= parlamentar.uf %></strong>
+        </p>
+      </div>
+    </div>
+
+    <div class="parlamentar-card-metrics">
+      <div class="metric-pill">
+        <span class="metric-icon">📜</span>
+        <div>
+          <% if parlamentar.propostas_count > 0 %>
+            <strong><%= parlamentar.propostas_count %></strong>
+            <span><%= parlamentar.propostas_count == 1 ? "proposta" : "propostas" %></span>
+          <% else %>
+            <span>Ver propostas</span>
+          <% end %>
+        </div>
+      </div>
+
+      <div class="metric-pill">
+        <span class="metric-icon">💰</span>
+        <div>
+          <% if parlamentar.total_despesas.to_f > 0 %>
+            <strong>R$ <%= number_to_human(parlamentar.total_despesas, units: { thousand: "mil", million: "mi" }, precision: 2, separator: ",") %></strong>
+          <% else %>
+            <span>Ver gastos</span>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <div class="parlamentar-card-footer">
+      <span class="card-cta">Ver perfil, propostas e gastos</span>
+      <span class="card-arrow">→</span>
+    </div>
+  <% end %>
+<% end %>

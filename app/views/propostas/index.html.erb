@@ -1,0 +1,149 @@
+<% content_for :title, "Propostas Legislativas (PLs, PECs, PLPs) — Legislativo Aberto" %>
+
+<section class="hero-banner">
+  <div class="hero-banner-content">
+    <span class="hero-eyebrow">📜 Acompanhamento Legislativo</span>
+    <h1>Propostas, Projetos de Lei e PECs</h1>
+    <p>Pesquise por tema, palavra-chave ou número da proposta. Consulte a situação de tramitação, autores e baixe o texto completo em PDF.</p>
+  </div>
+
+  <div class="hero-banner-side">
+    <div class="hero-mini-stats">
+      <div class="mini-stat">
+        <span>Total Filtrado</span>
+        <strong><%= @total_filtrado %></strong>
+      </div>
+    </div>
+    <%= button_to "🔄 Importar Propostas Recentes", sincronizar_recentes_propostas_path, method: :post, class: "btn btn-sync-hero", data: { turbo_submits_with: "Buscando propostas..." } %>
+  </div>
+</section>
+
+<section class="search-and-filters-box">
+  <%= form_with url: propostas_path, method: :get, local: true, class: "search-panel-form" do |f| %>
+    <div class="search-bar-Highlight">
+      <span class="search-icon">🔍</span>
+      <%= f.search_field :q,
+            value: params[:q],
+            placeholder: "Pesquise por tema na ementa, palavra-chave ou número (ex: educação, saúde, imposto, PL 1234...)",
+            class: "search-bar-input",
+            oninput: "clearTimeout(this._timer); this._timer = setTimeout(() => this.form.requestSubmit(), 320);" %>
+      <% if params[:q].present? %>
+        <%= link_to "✕", propostas_path(request.query_parameters.except(:q, :pagina)), class: "search-clear-btn" %>
+      <% end %>
+      <%= f.submit "Buscar", class: "btn btn-primary search-bar-btn" %>
+    </div>
+
+    <% if @tipos.any? %>
+      <div class="quick-party-bar">
+        <span class="quick-party-label">Tipos de matéria:</span>
+        <div class="quick-party-pills">
+          <%= link_to "Todas", propostas_path(request.query_parameters.except(:tipo, :pagina)),
+                class: "party-chip #{'active' if params[:tipo].blank?}" %>
+          <% @tipos.each do |sigla| %>
+            <%= link_to sigla,
+                  propostas_path(request.query_parameters.merge(tipo: sigla).except(:pagina)),
+                  class: "party-chip #{'active' if params[:tipo] == sigla}" %>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <div class="secondary-filters-row">
+      <div class="filter-group">
+        <%= f.label :casa, "Casa Legislativa" %>
+        <%= f.select :casa, [
+          ["Todas as Casas", ""],
+          ["Câmara dos Deputados", "camara"],
+          ["Senado Federal", "senado"]
+        ], { selected: params[:casa] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+      </div>
+
+      <div class="filter-group">
+        <%= f.label :tipo, "Tipo de Proposta" %>
+        <%= f.select :tipo, [["Todos os Tipos", ""]] + @tipos.map { |t| [t, t] }, { selected: params[:tipo] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+      </div>
+
+      <div class="filter-group">
+        <%= f.label :ano, "Ano de Apresentação" %>
+        <%= f.select :ano, [["Todos os Anos", ""]] + @anos.map { |a| [a, a] }, { selected: params[:ano] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+      </div>
+
+      <div class="filter-buttons">
+        <%= link_to "Limpar Tudo", propostas_path, class: "btn btn-outline" %>
+      </div>
+    </div>
+  <% end %>
+</section>
+
+<div class="results-toolbar">
+  <p class="results-count-text">Exibindo <strong><%= @propostas.size %></strong> de <strong><%= @total_filtrado %></strong> propostas encontradas</p>
+</div>
+
+<% if @propostas.any? %>
+  <div class="propostas-list">
+    <% @propostas.each do |proposta| %>
+      <article class="proposta-card">
+        <div class="proposta-card-header">
+          <div class="proposta-badges">
+            <span class="badge <%= proposta.casa == 'camara' ? 'badge-camara' : 'badge-senado' %>">
+              <%= proposta.casa_label %>
+            </span>
+            <span class="badge badge-tipo"><%= proposta.titulo %></span>
+            <% if proposta.status_situacao.present? %>
+              <span class="badge badge-status"><%= proposta.status_situacao %></span>
+            <% end %>
+          </div>
+
+          <% if proposta.data_apresentacao.present? %>
+            <time class="proposta-date">📅 <%= proposta.data_apresentacao.strftime("%d/%m/%Y") %></time>
+          <% end %>
+        </div>
+
+        <p class="proposta-ementa"><%= proposta.ementa.presence || "Ementa não disponível. Clique em ver detalhes para sincronizar." %></p>
+
+        <% if proposta.parlamentares.any? %>
+          <div class="proposta-authors">
+            <span class="authors-label">Autoria:</span>
+            <% proposta.parlamentares.each do |autor| %>
+              <%= link_to "#{autor.nome} (#{autor.partido}-#{autor.uf})", parlamentar_path(autor), class: "author-chip" %>
+            <% end %>
+          </div>
+        <% end %>
+
+        <div class="proposta-card-footer">
+          <%= link_to "Ver detalhes, autores e texto completo →", proposta_path(proposta), class: "btn btn-sm btn-outline" %>
+          <% if proposta.url_inteiro_teor.present? %>
+            <a href="<%= proposta.url_inteiro_teor %>" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
+              📄 Inteiro Teor (PDF) ↗
+            </a>
+          <% end %>
+        </div>
+      </article>
+    <% end %>
+  </div>
+
+  <% if @total_paginas > 1 %>
+    <nav class="pagination">
+      <% if @pagina > 1 %>
+        <%= link_to "← Anterior", propostas_path(request.query_parameters.merge(pagina: @pagina - 1)), class: "btn btn-outline" %>
+      <% end %>
+      <div class="pagination-pages">
+        <% inicio = [@pagina - 2, 1].max %>
+        <% fim = [inicio + 4, @total_paginas].min %>
+        <% (inicio..fim).each do |num| %>
+          <%= link_to num, propostas_path(request.query_parameters.merge(pagina: num)), class: "page-number #{'active' if num == @pagina}" %>
+        <% end %>
+      </div>
+      <% if @pagina < @total_paginas %>
+        <%= link_to "Próxima →", propostas_path(request.query_parameters.merge(pagina: @pagina + 1)), class: "btn btn-outline" %>
+      <% end %>
+    </nav>
+  <% end %>
+<% else %>
+  <div class="empty-state">
+    <div class="empty-icon">📜</div>
+    <h3>Nenhuma proposta encontrada</h3>
+    <p>Você pode importar as propostas recentes da Câmara clicando no botão abaixo, ou abrir o perfil de qualquer Deputado ou Senador para carregar automaticamente suas propostas.</p>
+    <%= button_to "🔄 Importar Propostas Recentes Agora", sincronizar_recentes_propostas_path, method: :post, class: "btn btn-primary", data: { turbo_submits_with: "Importando propostas..." } %>
+  </div>
+<% end %>

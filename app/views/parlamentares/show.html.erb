@@ -1,0 +1,457 @@
+<% content_for :title, "#{@parlamentar.nome} (#{@parlamentar.partido}-#{@parlamentar.uf}) — Legislativo Aberto" %>
+
+<div class="breadcrumb">
+  <%= link_to "← Voltar para Catálogo de Parlamentares", parlamentares_path, class: "breadcrumb-link" %>
+</div>
+
+<section class="profile-card <%= @parlamentar.deputado? ? 'profile-camara' : 'profile-senado' %>">
+  <div class="profile-banner-strip"></div>
+
+  <div class="profile-body">
+    <div class="profile-main">
+      <div class="profile-avatar-wrap">
+        <% if @parlamentar.foto_url.present? %>
+          <img src="<%= @parlamentar.foto_url %>" alt="Foto de <%= @parlamentar.nome %>" class="profile-avatar">
+        <% else %>
+          <div class="profile-avatar-fallback"><%= @parlamentar.nome.first(2).upcase %></div>
+        <% end %>
+      </div>
+
+      <div class="profile-info">
+        <div class="profile-badges">
+          <span class="badge <%= @parlamentar.deputado? ? 'badge-camara' : 'badge-senado' %>">
+            <%= @parlamentar.cargo_label %>
+          </span>
+          <span class="badge badge-party-strong"><%= @parlamentar.partido %></span>
+          <span class="badge badge-uf">UF: <%= @parlamentar.uf %></span>
+          <% if @parlamentar.situacao.present? %>
+            <span class="badge badge-status">● <%= @parlamentar.situacao %></span>
+          <% end %>
+        </div>
+
+        <h1 class="profile-name"><%= @parlamentar.nome %></h1>
+        <% if @parlamentar.nome_civil.present? && @parlamentar.nome_civil != @parlamentar.nome %>
+          <p class="profile-civil-name">Nome civil: <strong><%= @parlamentar.nome_civil %></strong></p>
+        <% end %>
+
+        <div class="profile-quick-contacts">
+          <% if @parlamentar.gabinete_formatado.present? %>
+            <span class="contact-pill">📍 <%= @parlamentar.gabinete_formatado %></span>
+          <% end %>
+          <% if @parlamentar.telefone.present? %>
+            <a href="tel:<%= @parlamentar.telefone %>" class="contact-pill">📞 <%= @parlamentar.telefone %></a>
+          <% end %>
+          <% if @parlamentar.email.present? %>
+            <a href="mailto:<%= @parlamentar.email %>" class="contact-pill">✉️ <%= @parlamentar.email %></a>
+          <% end %>
+        </div>
+
+        <div class="profile-socials-section">
+          <span class="detail-label">Redes Sociais e Canais Oficiais</span>
+          <div class="profile-socials">
+            <% redes = @parlamentar.redes_sociais_detalhadas %>
+            <% if redes.any? %>
+              <% redes.each do |rede| %>
+                <a href="<%= rede[:url] %>" target="_blank" rel="noopener" class="social-btn <%= rede[:classe] %>">
+                  <%= icone_rede_social_svg(rede[:id]) %>
+                  <span><%= rede[:nome] %></span>
+                  <span class="social-ext">↗</span>
+                </a>
+              <% end %>
+            <% else %>
+              <span class="muted-text">Nenhuma rede social informada na API oficial.</span>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-actions">
+      <%= button_to "🔄 Atualizar Dados, Votos, Gastos e Propostas", sincronizar_parlamentar_path(@parlamentar), method: :post, class: "btn btn-primary", data: { turbo_submits_with: "Sincronizando..." } %>
+      <a href="<%= @parlamentar.url_perfil_oficial %>" target="_blank" rel="noopener" class="btn btn-outline">
+        🔗 Página na <%= @parlamentar.deputado? ? "Câmara" : "Senado" %> ↗
+      </a>
+      <a href="<%= @parlamentar.url_transparencia_oficial %>" target="_blank" rel="noopener" class="btn btn-outline">
+        💰 Portal da Transparência ↗
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="finance-summary-grid">
+  <div class="finance-card">
+    <div class="finance-card-top">
+      <span class="finance-label">Salário Mensal Bruto (Subsídio)</span>
+      <span class="finance-icon">💵</span>
+    </div>
+    <strong class="finance-value">
+      R$ <%= number_with_precision(@parlamentar.subsidio_mensal, precision: 2, separator: ",", delimiter: ".") %>
+    </strong>
+    <span class="finance-note">Remuneração oficial (Decreto Legislativo nº 172/2022)</span>
+  </div>
+
+  <div class="finance-card" onclick="switchProfileTab('gastos')" style="cursor: pointer;" title="Clique para ver detalhes dos gastos">
+    <div class="finance-card-top">
+      <span class="finance-label">Cota Parlamentar (Amostra Recente)</span>
+      <span class="finance-icon">🧾</span>
+    </div>
+    <strong class="finance-value finance-expense">
+      R$ <%= number_with_precision(@parlamentar.total_despesas, precision: 2, separator: ",", delimiter: ".") %>
+    </strong>
+    <span class="finance-note"><%= @parlamentar.despesas.count %> notas fiscais/reembolsos sincronizados • Ver notas →</span>
+  </div>
+
+  <div class="finance-card" onclick="switchProfileTab('propostas')" style="cursor: pointer;" title="Clique para ver as propostas">
+    <div class="finance-card-top">
+      <span class="finance-label">Propostas e Projetos de Lei</span>
+      <span class="finance-icon">📜</span>
+    </div>
+    <strong class="finance-value finance-proposals">
+      <%= @parlamentar.propostas_count %>
+    </strong>
+    <span class="finance-note">Matérias legislativas de autoria ou coautoria • Ver lista →</span>
+  </div>
+
+  <div class="finance-card" onclick="switchProfileTab('votos')" style="cursor: pointer;" title="Clique para ver histórico de votações">
+    <div class="finance-card-top">
+      <span class="finance-label">Votações Nominais em Plenário</span>
+      <span class="finance-icon">🗳️</span>
+    </div>
+    <strong class="finance-value finance-votes">
+      <%= @parlamentar.votos_count %>
+    </strong>
+    <span class="finance-note">Posicionamentos nominais registrados (Sim / Não) • Ver votos →</span>
+  </div>
+</section>
+
+<div class="profile-tabs-nav" role="tablist">
+  <button type="button" id="tab-btn-propostas" class="profile-tab-btn active" onclick="switchProfileTab('propostas')">
+    📜 Propostas Legislativas
+    <span class="tab-pill-count"><%= @total_propostas_parlamentar %></span>
+  </button>
+  <button type="button" id="tab-btn-votos" class="profile-tab-btn" onclick="switchProfileTab('votos')">
+    🗳️ Votações em Plenário
+    <span class="tab-pill-count"><%= @votos_recentes.size %></span>
+  </button>
+  <button type="button" id="tab-btn-gastos" class="profile-tab-btn" onclick="switchProfileTab('gastos')">
+    💰 Gastos e Notas Fiscais
+    <span class="tab-pill-count"><%= @despesas_recentes.size %></span>
+  </button>
+  <button type="button" id="tab-btn-gabinete" class="profile-tab-btn" onclick="switchProfileTab('gabinete')">
+    🏛️ Gabinete e Biografia
+  </button>
+</div>
+
+<div id="tab-panel-propostas" class="profile-tab-panel">
+  <%= render partial: "parlamentares/propostas_frame", locals: {
+    parlamentar: @parlamentar,
+    propostas: @propostas,
+    tipos_proposta: @tipos_proposta,
+    total_propostas_parlamentar: @total_propostas_parlamentar
+  } %>
+</div>
+
+<div id="tab-panel-votos" class="profile-tab-panel" style="display: none;">
+  <section class="votos-section">
+    <div class="section-header">
+      <div>
+        <h2>🗳️ Histórico de Votações Nominais em Plenário</h2>
+        <p class="section-subtitle">Veja como <%= @parlamentar.nome %> votou nas sessões deliberativas da <%= @parlamentar.casa_label %>.</p>
+      </div>
+    </div>
+
+    <% if @votos_recentes.any? %>
+      <% votos_sim = @resumo_votos["Sim"].to_i %>
+      <% votos_nao = (@resumo_votos["Não"].to_i + @resumo_votos["Nao"].to_i) %>
+      <% votos_abst = (@resumo_votos["Abstenção"].to_i + @resumo_votos["Abstencao"].to_i) %>
+      <% votos_outros = @parlamentar.votos_count - votos_sim - votos_nao - votos_abst %>
+
+      <div class="votos-summary-bar">
+        <div class="voto-stat-box voto-box-sim" onclick="filterVotosByType('sim')">
+          <span class="voto-stat-label">✅ Votou SIM</span>
+          <strong class="voto-stat-num"><%= votos_sim %></strong>
+        </div>
+        <div class="voto-stat-box voto-box-nao" onclick="filterVotosByType('não')">
+          <span class="voto-stat-label">❌ Votou NÃO</span>
+          <strong class="voto-stat-num"><%= votos_nao %></strong>
+        </div>
+        <div class="voto-stat-box voto-box-abst" onclick="filterVotosByType('absten')">
+          <span class="voto-stat-label">⚪ Abstenções</span>
+          <strong class="voto-stat-num"><%= votos_abst %></strong>
+        </div>
+        <div class="voto-stat-box voto-box-all" onclick="filterVotosByType('')">
+          <span class="voto-stat-label">📊 Mostrar Todos</span>
+          <strong class="voto-stat-num"><%= @votos_recentes.size %></strong>
+        </div>
+      </div>
+
+      <div class="despesas-table-wrap">
+        <div class="despesas-table-header">
+          <h3>Votações Registradas (<%= @votos_recentes.size %>)</h3>
+          <input type="search"
+                 id="input-filtro-votos"
+                 placeholder="🔍 Buscar por matéria, PEC, PL ou descrição da votação..."
+                 class="form-input despesas-filter-input"
+                 oninput="filterVotosRows(this.value)">
+        </div>
+
+        <div class="votacoes-cards-list" id="lista-votos-parlamentar">
+          <% @votos_recentes.each do |voto_p| %>
+            <% votacao = voto_p.votacao %>
+            <article class="votacao-item-card" data-tipo-voto="<%= voto_p.tipo_voto.to_s.downcase %>">
+              <div class="votacao-item-main">
+                <div class="votacao-item-badges">
+                  <% if votacao.proposta_identificacao.present? %>
+                    <% if votacao.proposta_id.present? %>
+                      <%= link_to votacao.proposta_identificacao, proposta_path(votacao.proposta_id), class: "badge badge-tipo" %>
+                    <% else %>
+                      <span class="badge badge-tipo"><%= votacao.proposta_identificacao %></span>
+                    <% end %>
+                  <% end %>
+
+                  <% if votacao.orgao.present? %>
+                    <span class="badge badge-neutral"><%= votacao.orgao %></span>
+                  <% end %>
+
+                  <span class="badge <%= votacao.resultado_classe %>"><%= votacao.resultado_label %></span>
+
+                  <% if votacao.data.present? %>
+                    <time class="proposta-date">📅 <%= votacao.data.strftime("%d/%m/%Y %H:%M") %></time>
+                  <% end %>
+                </div>
+
+                <p class="votacao-descricao"><%= votacao.descricao.presence || "Votação nominal em plenário." %></p>
+
+                <% if votacao.votos_sim > 0 || votacao.votos_nao > 0 %>
+                  <div class="votacao-placar">
+                    <span class="placar-pill placar-sim">Placar Geral — Sim: <strong><%= votacao.votos_sim %></strong></span>
+                    <span class="placar-pill placar-nao">Não: <strong><%= votacao.votos_nao %></strong></span>
+                    <% if votacao.votos_outros > 0 %>
+                      <span class="placar-pill">Outros/Abst: <strong><%= votacao.votos_outros %></strong></span>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+
+              <div class="votacao-item-voto">
+                <span class="voto-caption">Voto de <%= @parlamentar.nome.split.first %>:</span>
+                <span class="voto-pill-large <%= voto_p.voto_badge_classe %>">
+                  <% case voto_p.tipo_voto.to_s.downcase %>
+                  <% when "sim" %>
+                    ✅ SIM
+                  <% when "não", "nao" %>
+                    ❌ NÃO
+                  <% when "abstenção", "abstencao" %>
+                    ⚪ ABSTENÇÃO
+                  <% when "obstrução", "obstrucao" %>
+                    🛑 OBSTRUÇÃO
+                  <% else %>
+                    <%= voto_p.tipo_voto %>
+                  <% end %>
+                </span>
+              </div>
+            </article>
+          <% end %>
+        </div>
+      </div>
+    <% else %>
+      <div class="empty-state">
+        <div class="empty-icon">🗳️</div>
+        <h3>Nenhuma votação nominal sincronizada ainda</h3>
+        <p>Clique no botão "🔄 Atualizar Dados, Votos, Gastos e Propostas" no topo do perfil para buscar as votações nominais na API oficial da <%= @parlamentar.casa_label %>.</p>
+      </div>
+    <% end %>
+  </section>
+</div>
+
+<div id="tab-panel-gastos" class="profile-tab-panel" style="display: none;">
+  <section class="gastos-section">
+    <div class="section-header">
+      <div>
+        <h2>💰 Gastos da Cota Parlamentar e Notas Fiscais</h2>
+        <p class="section-subtitle">Despesas reembolsadas pela <%= @parlamentar.casa_label %> para exercício da atividade parlamentar.</p>
+      </div>
+    </div>
+
+    <% if @despesas_recentes.any? %>
+      <div class="gastos-categorias-box">
+        <h3>Distribuição por Categoria de Gasto</h3>
+        <% total_geral = [@parlamentar.total_despesas.to_f, 1.0].max %>
+        <div class="categorias-list">
+          <% @despesas_por_categoria.each do |categoria, valor| %>
+            <% percentual = ((valor.to_f / total_geral) * 100).round(1) %>
+            <div class="categoria-item">
+              <div class="categoria-item-top">
+                <span class="categoria-nome"><%= categoria %></span>
+                <strong class="categoria-valor">
+                  R$ <%= number_with_precision(valor, precision: 2, separator: ",", delimiter: ".") %>
+                  <small>(<%= percentual %>%)</small>
+                </strong>
+              </div>
+              <div class="categoria-bar-bg">
+                <div class="categoria-bar-fill" style="width: <%= [percentual, 2].max %>%;"></div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+
+      <div class="despesas-table-wrap">
+        <div class="despesas-table-header">
+          <h3>Últimas Notas Fiscais e Reembolsos (<%= @despesas_recentes.size %>)</h3>
+          <input type="search"
+                 placeholder="🔍 Filtrar por fornecedor, CNPJ ou categoria..."
+                 class="form-input despesas-filter-input"
+                 oninput="filterDespesasRows(this.value)">
+        </div>
+
+        <div class="table-responsive">
+          <table class="despesas-table" id="tabela-despesas">
+            <thead>
+              <tr>
+                <th>Data / Competência</th>
+                <th>Categoria da Despesa</th>
+                <th>Fornecedor (CNPJ/CPF)</th>
+                <th>Valor Líquido</th>
+                <th>Nota Fiscal</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% @despesas_recentes.each do |despesa| %>
+                <tr class="despesa-row">
+                  <td>
+                    <% if despesa.data_documento.present? %>
+                      <strong><%= despesa.data_documento.strftime("%d/%m/%Y") %></strong>
+                    <% else %>
+                      <strong><%= "%02d/%d" % [despesa.mes, despesa.ano] %></strong>
+                    <% end %>
+                  </td>
+                  <td><span class="despesa-tipo-pill"><%= despesa.tipo_despesa %></span></td>
+                  <td>
+                    <div class="fornecedor-cell">
+                      <strong><%= despesa.fornecedor.presence || "Não informado" %></strong>
+                      <% if despesa.cnpj_cpf_fornecedor.present? %>
+                        <span>CNPJ/CPF: <%= despesa.cnpj_cpf_fornecedor %></span>
+                      <% end %>
+                    </div>
+                  </td>
+                  <td class="valor-col">
+                    <strong>R$ <%= number_with_precision(despesa.valor_liquido, precision: 2, separator: ",", delimiter: ".") %></strong>
+                  </td>
+                  <td>
+                    <% if despesa.url_documento.present? %>
+                      <a href="<%= despesa.url_documento %>" target="_blank" rel="noopener" class="btn btn-sm btn-outline">
+                        🧾 Abrir Nota ↗
+                      </a>
+                    <% else %>
+                      <span class="muted-text">Sem link</span>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% else %>
+      <div class="empty-state">
+        <div class="empty-icon">🧾</div>
+        <h3>Nenhuma despesa registrada na amostra atual</h3>
+        <p>Clique em "Atualizar Dados, Votos, Gastos e Propostas" no topo do perfil ou acesse o Portal da Transparência oficial.</p>
+      </div>
+    <% end %>
+  </section>
+</div>
+
+<div id="tab-panel-gabinete" class="profile-tab-panel" style="display: none;">
+  <section class="gabinete-bio-card">
+    <h3>🏛️ Informações Completas de Gabinete e Biografia</h3>
+    <div class="bio-grid">
+      <div class="bio-box">
+        <span class="detail-label">Nome Parlamentar</span>
+        <strong><%= @parlamentar.nome %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">Nome Civil Completo</span>
+        <strong><%= @parlamentar.nome_civil.presence || @parlamentar.nome %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">Casa Legislativa</span>
+        <strong><%= @parlamentar.casa_label %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">Partido e Estado</span>
+        <strong><%= @parlamentar.partido %> — <%= @parlamentar.uf %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">Localização do Gabinete</span>
+        <strong><%= @parlamentar.gabinete_formatado.presence || "Consulte no portal oficial" %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">Telefone do Gabinete</span>
+        <strong><%= @parlamentar.telefone.presence || "Não informado" %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">E-mail Oficial</span>
+        <strong><%= @parlamentar.email.presence || "Não informado" %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">Data de Nascimento</span>
+        <strong><%= @parlamentar.data_nascimento ? @parlamentar.data_nascimento.strftime("%d/%m/%Y") : "Não informada" %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">Naturalidade</span>
+        <strong><%= [@parlamentar.municipio_nascimento, @parlamentar.uf_nascimento].compact_blank.join(" - ").presence || "Não informada" %></strong>
+      </div>
+      <div class="bio-box">
+        <span class="detail-label">Escolaridade</span>
+        <strong><%= @parlamentar.escolaridade.presence || "Não informada" %></strong>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  function switchProfileTab(tabName) {
+    var tabs = ['propostas', 'votos', 'gastos', 'gabinete'];
+    tabs.forEach(function(t) {
+      var panel = document.getElementById('tab-panel-' + t);
+      var btn = document.getElementById('tab-btn-' + t);
+      if (panel && btn) {
+        if (t === tabName) {
+          panel.style.display = 'block';
+          btn.classList.add('active');
+        } else {
+          panel.style.display = 'none';
+          btn.classList.remove('active');
+        }
+      }
+    });
+  }
+
+  function filterDespesasRows(query) {
+    var q = (query || '').toLowerCase().trim();
+    var rows = document.querySelectorAll('#tabela-despesas tbody .despesa-row');
+    rows.forEach(function(row) {
+      var text = row.innerText.toLowerCase();
+      row.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+    });
+  }
+
+  function filterVotosRows(query) {
+    var q = (query || '').toLowerCase().trim();
+    var items = document.querySelectorAll('#lista-votos-parlamentar .votacao-item-card');
+    items.forEach(function(item) {
+      var text = item.innerText.toLowerCase();
+      item.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+    });
+  }
+
+  function filterVotosByType(tipoPrefix) {
+    var items = document.querySelectorAll('#lista-votos-parlamentar .votacao-item-card');
+    items.forEach(function(item) {
+      var t = (item.getAttribute('data-tipo-voto') || '').toLowerCase();
+      item.style.display = (!tipoPrefix || t.indexOf(tipoPrefix) !== -1) ? '' : 'none';
+    });
+  }
+</script>
