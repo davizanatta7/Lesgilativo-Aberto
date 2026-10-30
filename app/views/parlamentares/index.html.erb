@@ -43,7 +43,7 @@
 </section>
 
 <section class="search-and-filters-box">
-  <%= form_with url: parlamentares_path, method: :get, local: true, class: "search-panel-form" do |f| %>
+  <%= form_with url: parlamentares_path, method: :get, local: true, class: "search-panel-form", data: { live_search_target: "#catalogo_parlamentares" } do |f| %>
     <div class="search-bar-Highlight">
       <span class="search-icon" aria-hidden="true">🔍</span>
       <%= f.search_field :q,
@@ -51,10 +51,12 @@
             placeholder: "Digite o nome do parlamentar, partido ou UF (ex: Nikolas PL, Erika PSOL, Moro, PT, SP...)",
             class: "search-bar-input",
             autocomplete: "off",
-            oninput: "clearTimeout(this._timer); this._timer = setTimeout(() => this.form.requestSubmit(), 320);" %>
-      <% if params[:q].present? %>
-        <%= link_to "✕", parlamentares_path(request.query_parameters.except(:q, :pagina)), class: "search-clear-btn", title: "Limpar busca" %>
-      <% end %>
+            data: { live_search_input: true } %>
+      <%= link_to "✕", parlamentares_path(request.query_parameters.except(:q, :pagina)),
+            class: "search-clear-btn",
+            style: (params[:q].present? ? "" : "display:none"),
+            data: { live_search_clear: true },
+            title: "Limpar busca" %>
       <%= f.submit "Pesquisar", class: "btn btn-primary search-bar-btn" %>
     </div>
 
@@ -79,17 +81,17 @@
           ["Todas (Câmara + Senado)", ""],
           ["Câmara dos Deputados", "camara"],
           ["Senado Federal", "senado"]
-        ], { selected: params[:casa] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+        ], { selected: params[:casa] }, class: "form-select", data: { live_search_select: true } %>
       </div>
 
       <div class="filter-group">
         <%= f.label :partido, "Partido" %>
-        <%= f.select :partido, [["Todos os Partidos (#{@partidos.size})", ""]] + @partidos.map { |p| [p, p] }, { selected: params[:partido] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+        <%= f.select :partido, [["Todos os Partidos (#{@partidos.size})", ""]] + @partidos.map { |p| [p, p] }, { selected: params[:partido] }, class: "form-select", data: { live_search_select: true } %>
       </div>
 
       <div class="filter-group">
         <%= f.label :uf, "Estado (UF)" %>
-        <%= f.select :uf, [["Todos os Estados (27 UFs)", ""]] + @ufs.map { |uf| [uf, uf] }, { selected: params[:uf] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+        <%= f.select :uf, [["Todos os Estados (27 UFs)", ""]] + @ufs.map { |uf| [uf, uf] }, { selected: params[:uf] }, class: "form-select", data: { live_search_select: true } %>
       </div>
 
       <div class="filter-group">
@@ -98,7 +100,7 @@
           ["Ordem Alfabética (A-Z)", "nome"],
           ["Mais Propostas Sincronizadas", "propostas"],
           ["Maiores Gastos Sincronizados", "gastos"]
-        ], { selected: params[:ordem].presence || "nome" }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+        ], { selected: params[:ordem].presence || "nome" }, class: "form-select", data: { live_search_select: true } %>
       </div>
 
       <div class="filter-buttons">

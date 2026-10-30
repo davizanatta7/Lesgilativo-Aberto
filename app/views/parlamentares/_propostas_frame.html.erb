@@ -7,16 +7,19 @@
   </div>
 
   <div class="filter-panel">
-    <%= form_with url: parlamentar_path(parlamentar), method: :get, local: true, class: "search-panel-form" do |f| %>
+    <%= form_with url: parlamentar_path(parlamentar), method: :get, local: true, class: "search-panel-form", data: { live_search_target: "#parlamentar_propostas_lista" } do |f| %>
       <div class="search-bar-Highlight">
         <span class="search-icon">🔍</span>
         <%= f.search_field :q,
               value: params[:q],
               placeholder: "Pesquisar nas propostas de #{parlamentar.nome} (ex: saúde, educação, imposto, PL...)",
-              class: "search-bar-input" %>
-        <% if params[:q].present? %>
-          <%= link_to "✕", parlamentar_path(parlamentar, tipo: params[:tipo]), class: "search-clear-btn" %>
-        <% end %>
+              class: "search-bar-input",
+              autocomplete: "off",
+              data: { live_search_input: true } %>
+        <%= link_to "✕", parlamentar_path(parlamentar, tipo: params[:tipo]),
+              class: "search-clear-btn",
+              style: (params[:q].present? ? "" : "display:none"),
+              data: { live_search_clear: true } %>
         <%= f.submit "Filtrar", class: "btn btn-primary search-bar-btn" %>
       </div>
 
@@ -38,6 +41,7 @@
     <% end %>
   </div>
 
+  <div id="parlamentar_propostas_lista">
   <% if propostas.any? %>
     <div class="propostas-list">
       <% propostas.each do |proposta| %>
@@ -77,4 +81,5 @@
       <p>Clique em "Atualizar Dados, Gastos e Propostas" no topo do perfil para sincronizar com a <%= parlamentar.casa_label %>.</p>
     </div>
   <% end %>
+  </div>
 </div>

@@ -13,18 +13,28 @@ class Proposta < ApplicationRecord
 
   scope :por_casa, ->(casa) { where(propostas: { casa: casa }) if casa.present? && CASAS.include?(casa) }
   scope :por_tipo, ->(tipo) { where(propostas: { sigla_tipo: tipo.upcase }) if tipo.present? }
-  scope :por_ano, ->(ano) { where(propostas: { ano: ano.to_i }) if ano.present? }
+  scope :por_ano, ->(ano) { where(propostas: { ano: ano.to_i }) if ano.present? && ano.to_i > 0 }
   scope :busca_texto, ->(termo) {
     if termo.present?
-      sanitized = "%#{sanitize_sql_like(termo.strip)}%"
-      where(
-        "propostas.ementa LIKE :q OR propostas.ementa_detalhada LIKE :q OR propostas.keywords LIKE :q OR (propostas.sigla_tipo || ' ' || propostas.numero || '/' || propostas.ano) LIKE :q OR propostas.numero LIKE :q",
-        q: sanitized
-      )
+      limpo = termo.strip
+      if (m = limpo.match(/\A([a-zA-Z]{2,6})\s+(\d+)(?:\/(\d{4}))?\z/))
+        sigla = m[1].upcase
+        num = m[2]
+        ano_busca = m[3]
+        rel = where(propostas: { sigla_tipo: sigla, numero: num })
+        rel = rel.where(propostas: { ano: ano_busca.to_i }) if ano_busca.present?
+        rel
+      else
+        sanitized = "%#{sanitize_sql_like(limpo)}%"
+        where(
+          "propostas.ementa LIKE :q OR propostas.ementa_detalhada LIKE :q OR propostas.keywords LIKE :q OR (propostas.sigla_tipo || ' ' || propostas.numero || '/' || COALESCE(propostas.ano, '')) LIKE :q OR (propostas.sigla_tipo || ' ' || propostas.numero) LIKE :q OR propostas.numero LIKE :q",
+          q: sanitized
+        )
+      end
     end
   }
   scope :recentes, -> {
-    order(Arel.sql("COALESCE(propostas.data_apresentacao, propostas.created_at) DESC, propostas.ano DESC, propostas.id DESC"))
+    order(Arel.sql("CASE WHEN propostas.sigla_tipo IN ('PL', 'PEC', 'PLP', 'PDL', 'MPV') THEN 0 ELSE 1 END ASC, COALESCE(propostas.data_apresentacao, propostas.created_at) DESC, COALESCE(propostas.ano, 0) DESC, propostas.id DESC"))
   }
 
   def to_param
@@ -32,7 +42,11 @@ class Proposta < ApplicationRecord
   end
 
   def titulo
-    "#{sigla_tipo} #{numero}/#{ano}"
+    if ano.present? && ano.to_i > 0
+      "#{sigla_tipo} #{numero}/#{ano}"
+    else
+      "#{sigla_tipo} #{numero}"
+    end
   end
 
   def casa_label

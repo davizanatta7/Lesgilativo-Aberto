@@ -13,6 +13,7 @@ class LegislativoSyncJob < ApplicationJob
       camara.sync_deputados
       senado.sync_senadores
       camara.sync_propostas_recentes
+      senado.sync_propostas_recentes
     when "parlamentar"
       parlamentar = Parlamentar.find_by(id: parlamentar_id)
       return unless parlamentar

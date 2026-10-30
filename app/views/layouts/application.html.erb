@@ -15,9 +15,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 
-    <link rel="icon" href="/icon.png" type="image/png">
-    <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/icon.png">
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="icon" href="/icon.png?v=2" type="image/png">
+    <link rel="icon" href="/icon.svg?v=2" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
+    <link rel="manifest" href="/manifest.json">
 
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
   </head>
@@ -26,7 +28,9 @@
     <header class="navbar">
       <div class="container navbar-content">
         <%= link_to root_path, class: "brand" do %>
-          <div class="brand-logo-box">🏛️</div>
+          <div class="brand-logo-box">
+            <img src="/icon.png?v=2" alt="Legislativo Aberto" class="brand-logo-img" width="42" height="42">
+          </div>
           <div>
             <span class="brand-title">Legislativo<span class="brand-accent">Aberto</span></span>
             <span class="brand-subtitle">Transparência • Câmara &amp; Senado</span>
@@ -73,7 +77,10 @@
     <footer class="footer">
       <div class="container footer-grid">
         <div class="footer-brand">
-          <strong>🏛️ Legislativo Aberto</strong>
+          <strong class="footer-brand-title">
+            <img src="/icon.png?v=2" alt="" class="footer-logo-img" width="28" height="28">
+            Legislativo Aberto
+          </strong>
           <p>Plataforma de transparência pública para acompanhamento de Deputados Federais, Senadores, Projetos de Lei e Cota Parlamentar.</p>
         </div>
         <div class="footer-links">
@@ -84,5 +91,115 @@
         </div>
       </div>
     </footer>
+
+    <script>
+      (function() {
+        let activeController = null;
+        let debounceTimer = null;
+
+        function performLiveSearch(form) {
+          const targetSelector = form.getAttribute("data-live-search-target");
+          if (!targetSelector) return;
+
+          const targetEl = document.querySelector(targetSelector);
+          if (!targetEl) return;
+
+          if (activeController) {
+            activeController.abort();
+          }
+          activeController = new AbortController();
+
+          const formData = new FormData(form);
+          const params = new URLSearchParams();
+          for (const [key, value] of formData.entries()) {
+            if (value !== null && String(value).trim() !== "") {
+              params.append(key, value);
+            }
+          }
+
+          const baseUrl = form.getAttribute("action") || window.location.pathname;
+          const queryString = params.toString();
+          const url = queryString ? (baseUrl + "?" + queryString) : baseUrl;
+
+          targetEl.classList.add("is-searching");
+
+          fetch(url, {
+            method: "GET",
+            headers: {
+              "Accept": "text/html",
+              "X-Live-Search": "1"
+            },
+            signal: activeController.signal
+          })
+            .then(function(response) {
+              if (!response.ok) throw new Error("Network error");
+              return response.text();
+            })
+            .then(function(html) {
+              const doc = new DOMParser().parseFromString(html, "text/html");
+              const newTarget = doc.querySelector(targetSelector);
+              if (newTarget) {
+                targetEl.innerHTML = newTarget.innerHTML;
+              }
+              window.history.replaceState({}, "", url);
+            })
+            .catch(function(err) {
+              if (err.name !== "AbortError") {
+                console.warn("Erro na busca fluida:", err);
+              }
+            })
+            .finally(function() {
+              targetEl.classList.remove("is-searching");
+            });
+        }
+
+        document.addEventListener("input", function(e) {
+          const input = e.target.closest("[data-live-search-input]");
+          if (!input) return;
+
+          const form = input.closest("form[data-live-search-target]");
+          if (!form) return;
+
+          const clearBtn = form.querySelector("[data-live-search-clear]");
+          if (clearBtn) {
+            clearBtn.style.display = input.value.trim().length > 0 ? "" : "none";
+          }
+
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(function() {
+            performLiveSearch(form);
+          }, 180);
+        });
+
+        document.addEventListener("change", function(e) {
+          const select = e.target.closest("[data-live-search-select]");
+          if (!select) return;
+
+          const form = select.closest("form[data-live-search-target]");
+          if (!form) return;
+
+          clearTimeout(debounceTimer);
+          performLiveSearch(form);
+        });
+
+        document.addEventListener("click", function(e) {
+          const clearBtn = e.target.closest("[data-live-search-clear]");
+          if (!clearBtn) return;
+
+          const form = clearBtn.closest("form[data-live-search-target]");
+          if (!form) return;
+
+          e.preventDefault();
+          const input = form.querySelector("[data-live-search-input]");
+          if (input) {
+            input.value = "";
+            input.focus();
+          }
+          clearBtn.style.display = "none";
+          clearTimeout(debounceTimer);
+          performLiveSearch(form);
+        });
+      })();
+    </script>
   </body>
 </html>

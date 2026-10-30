@@ -10,13 +10,19 @@ class CamaraSyncService
     @logger = logger
   end
 
-  # Sincroniza a lista de todos os deputados em exercício
+  # Sincroniza a lista de todos os deputados em exercício (513 deputados)
   def sync_deputados
     @logger.info "[CamaraSync] Buscando lista de deputados em exercício..."
-    dados = fetch_paginated("/deputados", { ordem: "ASC", ordenarPor: "nome", itens: 100 })
-    count = 0
+    dados = fetch_paginated("/deputados", { ordem: "ASC", ordenarPor: "nome", itens: 1000 })
+    if dados.size < 513
+      dados_paginados = fetch_paginated("/deputados", { ordem: "ASC", ordenarPor: "nome", itens: 100 })
+      dados = (dados + dados_paginados).uniq { |d| d["id"].to_s }
+    end
 
+    count = 0
     dados.each do |item|
+      next if item["id"].blank?
+
       parlamentar = Parlamentar.find_or_initialize_by(
         casa: "camara",
         external_id: item["id"].to_s
@@ -32,6 +38,7 @@ class CamaraSyncService
       count += 1
     end
 
+    Rails.cache.delete("parlamentares/resumo_contadores")
     @logger.info "[CamaraSync] #{count} deputados sincronizados com sucesso."
     count
   end
@@ -124,20 +131,40 @@ class CamaraSyncService
     []
   end
 
-  # Sincroniza as propostas de autoria de um deputado
-  def sync_propostas_deputado(parlamentar, limite: 50)
+  # Sincroniza as propostas de autoria de um deputado (priorizando Projetos de Lei, PECs, Emendas e Requerimentos)
+  def sync_propostas_deputado(parlamentar, limite: 60)
     return [] unless parlamentar.deputado?
 
-    resp = get_json("/proposicoes", {
-      idDeputadoAutor: parlamentar.external_id,
-      itens: limite,
-      ordem: "DESC",
-      ordenarPor: "id"
-    })
-    dados = resp&.dig("dados") || []
+    grupos_siglas = [
+      { siglas: %w[PL PEC PLP PDL MPV PRC], itens: limite },
+      { siglas: %w[EMC EMP EMR SBT], itens: 35 },
+      { siglas: %w[REQ RIC INC PFC], itens: 25 }
+    ]
+
+    dados = []
+    grupos_siglas.each do |grupo|
+      resp = get_json("/proposicoes", {
+        idDeputadoAutor: parlamentar.external_id,
+        siglaTipo: grupo[:siglas],
+        itens: grupo[:itens],
+        ordem: "DESC",
+        ordenarPor: "id"
+      })
+      dados.concat(resp&.dig("dados") || [])
+    end
+
+    if dados.empty?
+      resp = get_json("/proposicoes", {
+        idDeputadoAutor: parlamentar.external_id,
+        itens: limite,
+        ordem: "DESC",
+        ordenarPor: "id"
+      })
+      dados = resp&.dig("dados") || []
+    end
 
     propostas_sincronizadas = []
-    dados.each do |item|
+    dados.uniq { |item| item["id"] }.each do |item|
       proposta = upsert_proposta_resumo(item)
       if proposta
         Autoria.find_or_create_by!(parlamentar: parlamentar, proposta: proposta)
@@ -145,24 +172,28 @@ class CamaraSyncService
       end
     end
 
-    parlamentar.update_column(:propostas_sincronizadas_em, Time.current)
+    parlamentar.update_columns(
+      propostas_count: parlamentar.propostas.count,
+      propostas_sincronizadas_em: Time.current
+    )
     propostas_sincronizadas
   rescue StandardError => e
     @logger.error "[CamaraSync] Erro ao sincronizar propostas do deputado #{parlamentar.external_id}: #{e.message}"
     []
   end
 
-  # Sincroniza propostas recentes gerais da Câmara
-  def sync_propostas_recentes(ano: Date.current.year, siglas: %w[PL PEC PLP PDL], itens_por_tipo: 30)
+  # Sincroniza propostas recentes gerais da Câmara (sem travar em um único ano)
+  def sync_propostas_recentes(ano: nil, siglas: %w[PL PEC PLP PDL MPV EMC RIC INC], itens_por_tipo: 35)
     total = 0
     siglas.each do |sigla|
-      resp = get_json("/proposicoes", {
+      params = {
         siglaTipo: sigla,
-        ano: ano,
         itens: itens_por_tipo,
         ordem: "DESC",
         ordenarPor: "id"
-      })
+      }
+      params[:ano] = ano if ano.present?
+      resp = get_json("/proposicoes", params)
       dados = resp&.dig("dados") || []
       dados.each do |item|
         proposta = upsert_proposta_resumo(item)
@@ -171,6 +202,37 @@ class CamaraSyncService
     end
     @logger.info "[CamaraSync] #{total} propostas recentes da Câmara sincronizadas."
     total
+  end
+
+  # Busca propostas sob demanda na API da Câmara por número/sigla ou palavras-chave da ementa
+  def buscar_propostas_api(termo: nil, sigla_tipo: nil,ano: nil, limite: 30)
+    params = {
+      itens: limite,
+      ordem: "DESC",
+      ordenarPor: "id"
+    }
+    params[:siglaTipo] = sigla_tipo.upcase if sigla_tipo.present?
+    params[:ano] = ano.to_i if ano.present? && ano.to_i > 0
+
+    if termo.present?
+      limpo = termo.strip
+      if (m = limpo.match(/\A([a-zA-Z]{2,6})\s+(\d+)(?:\/(\d{4}))?\z/))
+        params[:siglaTipo] = m[1].upcase
+        params[:numero] = m[2]
+        params[:ano] = m[3].to_i if m[3].present?
+      elsif limpo.match?(/\A\d+\z/)
+        params[:numero] = limpo
+      else
+        params[:keywords] = limpo
+      end
+    end
+
+    resp = get_json("/proposicoes", params)
+    dados = resp&.dig("dados") || []
+    dados.filter_map { |item| upsert_proposta_resumo(item) }
+  rescue StandardError => e
+    @logger.warn "[CamaraSync] Erro na busca sob demanda de propostas: #{e.message}"
+    []
   end
 
   # Sincroniza detalhes completos + autores de uma proposta específica
@@ -357,6 +419,14 @@ class CamaraSyncService
   def upsert_proposta_resumo(item)
     return nil if item["id"].blank?
 
+    data_apres = parse_date(item["dataApresentacao"])
+    ano_val = item["ano"].to_i
+    ano_resolvido = if ano_val > 0
+      ano_val
+    elsif data_apres.present?
+      data_apres.year
+    end
+
     proposta = Proposta.find_or_initialize_by(
       casa: "camara",
       external_id: item["id"].to_s
@@ -364,9 +434,10 @@ class CamaraSyncService
     proposta.assign_attributes(
       sigla_tipo: item["siglaTipo"] || "PROP",
       numero: item["numero"]&.to_s,
-      ano: item["ano"],
+      ano: ano_resolvido || proposta.ano,
       ementa: item["ementa"].presence || proposta.ementa,
-      data_apresentacao: parse_date(item["dataApresentacao"]) || proposta.data_apresentacao,
+      data_apresentacao: data_apres || proposta.data_apresentacao,
+      status_situacao: proposta.status_situacao.presence || "Em tramitação / Apresentada",
       uri_api: item["uri"]
     )
     proposta.save!
@@ -396,6 +467,7 @@ class CamaraSyncService
   def fetch_paginated(path, params = {})
     resultados = []
     pagina = 1
+    itens_por_pagina = params[:itens].to_i
 
     loop do
       resp = get_json(path, params.merge(pagina: pagina))
@@ -404,33 +476,48 @@ class CamaraSyncService
 
       resultados.concat(dados)
       links = resp["links"] || []
-      has_next = links.any? { |l| l["rel"] == "next" }
+      has_next = links.any? { |l| l["rel"] == "next" } || (itens_por_pagina > 0 && dados.size >= itens_por_pagina)
       break unless has_next
 
       pagina += 1
       break if pagina > 20
     end
 
-    resultados
+    resultados.uniq { |item| item["id"] || item.object_id }
   end
 
   def get_json(path, params = {})
     uri = URI("#{BASE_URL}#{path}")
     uri.query = URI.encode_www_form(params) if params.present?
 
-    req = Net::HTTP::Get.new(uri)
-    req["Accept"] = "application/json"
-    req["User-Agent"] = "LegislativoApp/1.0 (Ruby on Rails)"
+    tentativas = 0
+    begin
+      tentativas += 1
+      req = Net::HTTP::Get.new(uri)
+      req["Accept"] = "application/json"
+      req["User-Agent"] = "LegislativoApp/1.0 (Ruby on Rails)"
 
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = (uri.scheme == "https")
-    http.open_timeout = 10
-    http.read_timeout = 20
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = (uri.scheme == "https")
+      http.open_timeout = 10
+      http.read_timeout = 25
 
-    res = http.request(req)
-    return nil unless res.is_a?(Net::HTTPSuccess)
-
-    JSON.parse(res.body)
+      res = http.request(req)
+      if res.is_a?(Net::HTTPSuccess)
+        return JSON.parse(res.body)
+      elsif tentativas < 3
+        sleep(0.5 * tentativas)
+        raise "HTTP #{res.code}"
+      end
+      nil
+    rescue StandardError => e
+      if tentativas < 3
+        sleep(0.5 * tentativas)
+        retry
+      end
+      @logger.warn "[CamaraSync] Falha em GET #{path} após #{tentativas} tentativas: #{e.message}"
+      nil
+    end
   end
 
   def parse_date(value)

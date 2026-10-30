@@ -11,8 +11,9 @@ namespace :legislativo do
     puts "==> Sincronizando Senadores (Senado Federal)..."
     sen_count = senado.sync_senadores
 
-    puts "==> Sincronizando Propostas recentes da Câmara..."
-    prop_count = camara.sync_propostas_recentes(itens_por_tipo: 25)
+    puts "==> Sincronizando Propostas recentes da Câmara e do Senado..."
+    prop_camara = camara.sync_propostas_recentes(itens_por_tipo: 30)
+    prop_senado = senado.sync_propostas_recentes(itens_por_tipo: 20)
 
     puts "==> Sincronizando propostas de amostra dos primeiros parlamentares..."
     Parlamentar.where(casa: "camara").limit(5).each do |dep|

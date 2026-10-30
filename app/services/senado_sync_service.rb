@@ -157,10 +157,61 @@ class SenadoSyncService
       propostas_sincronizadas = sync_via_endpoint_autorias(parlamentar, limite: limite)
     end
 
-    parlamentar.update_column(:propostas_sincronizadas_em, Time.current)
+    parlamentar.update_columns(
+      propostas_count: parlamentar.propostas.count,
+      propostas_sincronizadas_em: Time.current
+    )
     propostas_sincronizadas
   rescue StandardError => e
     @logger.error "[SenadoSync] Erro ao sincronizar propostas do senador #{parlamentar.external_id}: #{e.message}"
+    []
+  end
+
+  # Sincroniza projetos e matérias em aberto (tramitando) no Senado Federal
+  def sync_propostas_recentes(siglas: %w[PL PEC PLP PDL], itens_por_tipo: 25)
+    total = 0
+    siglas.each do |sigla|
+      resp = get_json("/processo", { sigla: sigla, tramitando: "S" })
+      next unless resp.is_a?(Array)
+
+      resp.first(itens_por_tipo).each do |item|
+        proposta = salvar_item_processo_senado(item)
+        total += 1 if proposta
+      end
+    end
+    @logger.info "[SenadoSync] #{total} matérias em tramitação do Senado sincronizadas."
+    total
+  rescue StandardError => e
+    @logger.warn "[SenadoSync] Erro ao sincronizar propostas recentes do Senado: #{e.message}"
+    total
+  end
+
+  # Busca propostas e projetos em aberto na API do Senado por termo, sigla, número ou ano
+  def buscar_propostas_api(termo: nil, sigla_tipo: nil, ano: nil, limite: 25)
+    params = { tramitando: "S" }
+    params[:sigla] = sigla_tipo.upcase if sigla_tipo.present?
+    params[:ano] = ano.to_i if ano.present? && ano.to_i > 0
+
+    if termo.present?
+      limpo = termo.strip
+      if (m = limpo.match(/\A([a-zA-Z]{2,6})\s+(\d+)(?:\/(\d{4}))?\z/))
+        params[:sigla] = m[1].upcase
+        params[:numero] = m[2]
+        params[:ano] = m[3].to_i if m[3].present?
+        params.delete(:tramitando)
+      elsif limpo.match?(/\A\d+\z/)
+        params[:numero] = limpo
+      else
+        params[:palavraChave] = limpo
+      end
+    end
+
+    resp = get_json("/processo", params)
+    return [] unless resp.is_a?(Array)
+
+    resp.first(limite).filter_map { |item| salvar_item_processo_senado(item) }
+  rescue StandardError => e
+    @logger.warn "[SenadoSync] Erro na busca sob demanda do Senado: #{e.message}"
     []
   end
 
@@ -246,30 +297,37 @@ class SenadoSyncService
     I18n.transliterate(str.to_s).upcase.gsub(/[^A-Z0-9 ]/, "").squeeze(" ").strip
   end
 
+  def salvar_item_processo_senado(item)
+    codigo_materia = (item["codigoMateria"] || item["id"])&.to_s
+    return nil if codigo_materia.blank?
+
+    identificacao = item["identificacao"].to_s
+    sigla, num_ano = identificacao.split(" ", 2)
+    numero, ano = num_ano.to_s.split("/")
+
+    proposta = Proposta.find_or_initialize_by(casa: "senado", external_id: codigo_materia)
+    proposta.assign_attributes(
+      sigla_tipo: sigla.presence || item["sigla"] || "MAT",
+      descricao_tipo: item["tipoConteudo"],
+      numero: numero.presence || item["numero"]&.to_s,
+      ano: (ano.presence || item["ano"])&.to_i,
+      ementa: item["ementa"].presence || proposta.ementa,
+      data_apresentacao: parse_date(item["dataApresentacao"]) || proposta.data_apresentacao,
+      status_situacao: item["tramitando"] == "Sim" || item["tramitando"] == "S" ? "Em tramitação no Senado" : (proposta.status_situacao.presence || "Em tramitação")
+    )
+    proposta.save!
+    proposta
+  end
+
   def sync_via_endpoint_processo(parlamentar, limite: 50)
     resp = get_json("/processo", { codigoParlamentarAutor: parlamentar.external_id })
     return [] unless resp.is_a?(Array)
 
     propostas = []
     resp.first(limite).each do |item|
-      codigo_materia = (item["codigoMateria"] || item["id"])&.to_s
-      next if codigo_materia.blank?
+      proposta = salvar_item_processo_senado(item)
+      next unless proposta
 
-      identificacao = item["identificacao"].to_s
-      sigla, num_ano = identificacao.split(" ", 2)
-      numero, ano = num_ano.to_s.split("/")
-
-      proposta = Proposta.find_or_initialize_by(casa: "senado", external_id: codigo_materia)
-      proposta.assign_attributes(
-        sigla_tipo: sigla.presence || item["sigla"] || "MAT",
-        descricao_tipo: item["tipoConteudo"],
-        numero: numero.presence || item["numero"]&.to_s,
-        ano: (ano.presence || item["ano"])&.to_i,
-        ementa: item["ementa"].presence || proposta.ementa,
-        data_apresentacao: parse_date(item["dataApresentacao"]) || proposta.data_apresentacao,
-        status_situacao: item["tramitando"] == "Sim" ? "Em tramitação" : (proposta.status_situacao || "Tramitação encerrada")
-      )
-      proposta.save!
       Autoria.find_or_create_by!(parlamentar: parlamentar, proposta: proposta)
       propostas << proposta
     end

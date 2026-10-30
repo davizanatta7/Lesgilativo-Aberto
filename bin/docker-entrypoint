@@ -2,7 +2,8 @@
 
 # If running the rails server then create or migrate existing database
 if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
-  ./bin/rails db:prepare
+  ./bin/rails db:migrate
+  ./bin/rails runner "load Rails.root.join('db/seeds.rb') if Parlamentar.where(casa: 'camara').count < 513 || Parlamentar.where(casa: 'senado').count < 81 || Proposta.count < 150" &
 fi
 
 exec "${@}"

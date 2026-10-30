@@ -2,14 +2,29 @@ class ParlamentaresController < ApplicationController
   PER_PAGE = 24
 
   def index
-    resumo = Rails.cache.fetch("parlamentares/resumo_contadores", expires_in: 5.minutes) do
-      {
-        deputados: Parlamentar.where(casa: "camara").count,
-        senadores: Parlamentar.where(casa: "senado").count,
+    resumo = Rails.cache.read("parlamentares/resumo_contadores")
+    if resumo.nil? || resumo[:deputados].to_i < 513 || resumo[:senadores].to_i < 81
+      deputados_count = Parlamentar.where(casa: "camara").count
+      senadores_count = Parlamentar.where(casa: "senado").count
+
+      if deputados_count < 513 || senadores_count < 81
+        disparar_autocorrecao_parlamentares_em_background(
+          falta_camara: deputados_count < 513,
+          falta_senado: senadores_count < 81
+        )
+      end
+
+      resumo = {
+        deputados: deputados_count,
+        senadores: senadores_count,
         propostas: Proposta.count,
         ufs: Parlamentar.where.not(uf: [ nil, "" ]).distinct.order(:uf).pluck(:uf),
         partidos: Parlamentar.where.not(partido: [ nil, "" ]).distinct.order(:partido).pluck(:partido)
       }
+
+      if deputados_count >= 513 && senadores_count >= 81
+        Rails.cache.write("parlamentares/resumo_contadores", resumo, expires_in: 5.minutes)
+      end
     end
 
     @total_deputados = resumo[:deputados]
@@ -76,6 +91,21 @@ class ParlamentaresController < ApplicationController
 
   private
 
+  def disparar_autocorrecao_parlamentares_em_background(falta_camara:, falta_senado:)
+    return if Rails.cache.read("parlamentares/sync_em_andamento")
+
+    Rails.cache.write("parlamentares/sync_em_andamento", true, expires_in: 2.minutes)
+    Thread.new do
+      Rails.application.executor.wrap do
+        CamaraSyncService.new.sync_deputados if falta_camara
+        SenadoSyncService.new.sync_senadores if falta_senado
+        Rails.cache.delete("parlamentares/resumo_contadores")
+      ensure
+        Rails.cache.delete("parlamentares/sync_em_andamento")
+      end
+    end
+  end
+
   def carregar_propostas_do_parlamentar(parlamentar)
     propostas_scope = parlamentar.propostas.recentes
       .por_tipo(params[:tipo])
@@ -102,7 +132,8 @@ class ParlamentaresController < ApplicationController
 
   def sincronizar_parlamentar_se_necessario(parlamentar)
     precisa_detalhes = parlamentar.precisa_sincronizar_detalhes?
-    precisa_propostas = parlamentar.propostas_count.zero? && parlamentar.precisa_sincronizar_propostas?
+    tem_pl_principal = parlamentar.propostas.where(sigla_tipo: %w[PL PEC PLP PDL MPV PLS]).exists?
+    precisa_propostas = parlamentar.propostas_count.zero? || parlamentar.precisa_sincronizar_propostas? || (!tem_pl_principal && parlamentar.propostas_sincronizadas_em.present? && parlamentar.propostas_sincronizadas_em < 5.minutes.ago)
     precisa_despesas = parlamentar.despesas.empty? && parlamentar.precisa_sincronizar_despesas?
     precisa_votos = parlamentar.votos_count.zero? && parlamentar.precisa_sincronizar_votos?
     return unless precisa_detalhes || precisa_propostas || precisa_despesas || precisa_votos

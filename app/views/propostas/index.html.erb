@@ -19,17 +19,19 @@
 </section>
 
 <section class="search-and-filters-box">
-  <%= form_with url: propostas_path, method: :get, local: true, class: "search-panel-form" do |f| %>
+  <%= form_with url: propostas_path, method: :get, local: true, class: "search-panel-form", data: { live_search_target: "#catalogo_propostas" } do |f| %>
     <div class="search-bar-Highlight">
       <span class="search-icon">🔍</span>
       <%= f.search_field :q,
             value: params[:q],
             placeholder: "Pesquise por tema na ementa, palavra-chave ou número (ex: educação, saúde, imposto, PL 1234...)",
             class: "search-bar-input",
-            oninput: "clearTimeout(this._timer); this._timer = setTimeout(() => this.form.requestSubmit(), 320);" %>
-      <% if params[:q].present? %>
-        <%= link_to "✕", propostas_path(request.query_parameters.except(:q, :pagina)), class: "search-clear-btn" %>
-      <% end %>
+            autocomplete: "off",
+            data: { live_search_input: true } %>
+      <%= link_to "✕", propostas_path(request.query_parameters.except(:q, :pagina)),
+            class: "search-clear-btn",
+            style: (params[:q].present? ? "" : "display:none"),
+            data: { live_search_clear: true } %>
       <%= f.submit "Buscar", class: "btn btn-primary search-bar-btn" %>
     </div>
 
@@ -55,17 +57,17 @@
           ["Todas as Casas", ""],
           ["Câmara dos Deputados", "camara"],
           ["Senado Federal", "senado"]
-        ], { selected: params[:casa] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+        ], { selected: params[:casa] }, class: "form-select", data: { live_search_select: true } %>
       </div>
 
       <div class="filter-group">
         <%= f.label :tipo, "Tipo de Proposta" %>
-        <%= f.select :tipo, [["Todos os Tipos", ""]] + @tipos.map { |t| [t, t] }, { selected: params[:tipo] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+        <%= f.select :tipo, [["Todos os Tipos", ""]] + @tipos.map { |t| [t, t] }, { selected: params[:tipo] }, class: "form-select", data: { live_search_select: true } %>
       </div>
 
       <div class="filter-group">
         <%= f.label :ano, "Ano de Apresentação" %>
-        <%= f.select :ano, [["Todos os Anos", ""]] + @anos.map { |a| [a, a] }, { selected: params[:ano] }, class: "form-select", onchange: "this.form.requestSubmit()" %>
+        <%= f.select :ano, [["Todos os Anos", ""]] + @anos.map { |a| [a, a] }, { selected: params[:ano] }, class: "form-select", data: { live_search_select: true } %>
       </div>
 
       <div class="filter-buttons">
@@ -75,6 +77,7 @@
   <% end %>
 </section>
 
+<div id="catalogo_propostas">
 <div class="results-toolbar">
   <p class="results-count-text">Exibindo <strong><%= @propostas.size %></strong> de <strong><%= @total_filtrado %></strong> propostas encontradas</p>
 </div>
@@ -147,3 +150,4 @@
     <%= button_to "🔄 Importar Propostas Recentes Agora", sincronizar_recentes_propostas_path, method: :post, class: "btn btn-primary", data: { turbo_submits_with: "Importando propostas..." } %>
   </div>
 <% end %>
+</div>
